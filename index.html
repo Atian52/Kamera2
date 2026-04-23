@@ -3,71 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kamera CCTV - Secured Node</title>
+    <title>CCTV Camera Node - With Preview</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f0f0f0; padding-top: 50px; }
-        .box { background: white; padding: 25px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 85%; max-width: 400px; }
-        #status { color: #666; font-weight: bold; margin: 15px 0; }
+        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: white; padding: 20px; }
+        .container { background: #222; padding: 20px; border-radius: 15px; border: 1px solid #444; max-width: 500px; margin: auto; }
+        video { width: 100%; border-radius: 10px; background: #000; margin-top: 15px; transform: scaleX(-1); } /* Mirror preview */
+        .badge { background: #444; padding: 5px 10px; border-radius: 5px; font-size: 12px; color: #aaa; }
+        #status { font-weight: bold; margin: 15px 0; color: #00ff00; }
+        .live-tag { color: red; font-size: 12px; font-weight: bold; display: none; }
     </style>
 </head>
 <body>
 
-    <div class="box">
-        <h3>CCTV NODE AKTIF</h3>
-        <p id="status">Menunggu Monitor...</p>
-        <p style="font-size: 11px; color: #999;">Koneksi terenkripsi & dilindungi password.</p>
+    <div class="container">
+        <h3>CCTV NODE</h3>
+        <span class="badge" id="my-id-display">Memuat ID...</span>
+        <div id="status">Standby</div>
+        <div id="live-tag" class="live-tag">● LIVE STREAMING</div>
+        
+        <video id="local-preview" autoplay playsinline muted></video>
+        <p style="font-size: 11px; color: #666;">Preview di atas hanya untuk memastikan kamera aktif.</p>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
-        // --- SETTING LOGIN DI SINI ---
-        const VALID_USER = "admin"; 
-        const VALID_PASS = "12345"; 
-        const targetID = 'cctv-pribadi-aman-2026-999'; 
-        // ----------------------------
+        // --- CONFIG ---
+        const MY_CAMERA_ID = 'cam-01'; // Tentukan ID unik di sini
+        const MONITOR_ID = 'monitor-cctv-pusat-2026';
+        const VALID_USER = "admin";
+        const VALID_PASS = "12345";
+        // --------------
 
-        let peer = new Peer();
+        document.getElementById('my-id-display').innerText = "ID KAMERA: " + MY_CAMERA_ID;
+        const statusText = document.getElementById('status');
+        const liveTag = document.getElementById('live-tag');
+        const preview = document.getElementById('local-preview');
+        
+        let peer = new Peer(MY_CAMERA_ID);
         let localStream = null;
-        let dataConn = null;
 
-        peer.on('open', connectToMonitor);
-
-        function connectToMonitor() {
-            dataConn = peer.connect(targetID);
-            dataConn.on('open', () => {
-                document.getElementById('status').innerText = "Terhubung. Menunggu instruksi...";
-                
-                dataConn.on('data', (data) => {
-                    // Validasi Kredensial dari Monitor
-                    if (data.user === VALID_USER && data.pass === VALID_PASS) {
-                        if (data.command === 'start-camera') startCCTV();
-                        if (data.command === 'stop-camera') stopCCTV();
-                    } else {
-                        document.getElementById('status').innerText = "Akses ditolak: Login salah!";
-                    }
-                });
-            });
-            dataConn.on('close', () => setTimeout(connectToMonitor, 5000));
-        }
-
-        async function startCCTV() {
-            if (localStream) return;
+        // Langsung tampilkan preview kamera saat halaman dibuka
+        window.onload = async () => {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
-                peer.call(targetID, localStream);
-                document.getElementById('status').innerText = "LIVE: Streaming...";
-            } catch (e) { alert("Izin kamera gagal!"); }
-        }
-
-        function stopCCTV() {
-            if (localStream) {
-                localStream.getTracks().forEach(t => t.stop());
-                localStream = null;
+                preview.srcObject = localStream;
+            } catch (e) {
+                statusText.innerText = "Error: Kamera tidak diizinkan!";
+                statusText.style.color = "red";
             }
-            document.getElementById('status').innerText = "Standby (Kamera Off)";
-        }
+        };
 
-        peer.on('error', () => setTimeout(connectToMonitor, 5000));
+        peer.on('open', () => {
+            statusText.innerText = "Siap Digunakan (Standby)";
+        });
+
+        peer.on('connection', (conn) => {
+            conn.on('data', (data) => {
+                if (data.user === VALID_USER && data.pass === VALID_PASS) {
+                    if (data.command === 'start-camera') {
+                        peer.call(MONITOR_ID, localStream);
+                        statusText.innerText = "Terhubung ke Monitor";
+                        liveTag.style.display = "block";
+                    }
+                    if (data.command === 'stop-camera') {
+                        statusText.innerText = "Standby (Monitor Berhenti)";
+                        liveTag.style.display = "none";
+                    }
+                }
+            });
+        });
     </script>
 </body>
 </html>
