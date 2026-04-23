@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kamera CCTV - Secured Node</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f0f0; padding-top: 50px; }
+        .box { background: white; padding: 25px; border-radius: 15px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 85%; max-width: 400px; }
+        #status { color: #666; font-weight: bold; margin: 15px 0; }
+    </style>
+</head>
+<body>
+
+    <div class="box">
+        <h3>CCTV NODE AKTIF</h3>
+        <p id="status">Menunggu Monitor...</p>
+        <p style="font-size: 11px; color: #999;">Koneksi terenkripsi & dilindungi password.</p>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script>
+        // --- SETTING LOGIN DI SINI ---
+        const VALID_USER = "admin"; 
+        const VALID_PASS = "12345"; 
+        const targetID = 'cctv-pribadi-aman-2026-999'; 
+        // ----------------------------
+
+        let peer = new Peer();
+        let localStream = null;
+        let dataConn = null;
+
+        peer.on('open', connectToMonitor);
+
+        function connectToMonitor() {
+            dataConn = peer.connect(targetID);
+            dataConn.on('open', () => {
+                document.getElementById('status').innerText = "Terhubung. Menunggu instruksi...";
+                
+                dataConn.on('data', (data) => {
+                    // Validasi Kredensial dari Monitor
+                    if (data.user === VALID_USER && data.pass === VALID_PASS) {
+                        if (data.command === 'start-camera') startCCTV();
+                        if (data.command === 'stop-camera') stopCCTV();
+                    } else {
+                        document.getElementById('status').innerText = "Akses ditolak: Login salah!";
+                    }
+                });
+            });
+            dataConn.on('close', () => setTimeout(connectToMonitor, 5000));
+        }
+
+        async function startCCTV() {
+            if (localStream) return;
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
+                peer.call(targetID, localStream);
+                document.getElementById('status').innerText = "LIVE: Streaming...";
+            } catch (e) { alert("Izin kamera gagal!"); }
+        }
+
+        function stopCCTV() {
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+                localStream = null;
+            }
+            document.getElementById('status').innerText = "Standby (Kamera Off)";
+        }
+
+        peer.on('error', () => setTimeout(connectToMonitor, 5000));
+    </script>
+</body>
+</html>
